@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius, typography, sizes } from '../../design/t
 import { Button } from '../../components/Button';
 import { MediumHeader } from '../../components/MediumHeader';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { saveStoryPreferences } from '../../src/services/supabase';
+import { saveStoryBookInput } from '../../src/services/supabase';
 
 const CONTENT_RATINGS = [
     { id: 'PG', label: 'PG', description: 'Suitable for all ages' },
@@ -73,7 +73,7 @@ export default function ProfileScreen() {
         }
         setIsLoading(true);
 
-        saveStoryPreferences({
+        saveStoryBookInput({
             genres: selectedGenres,
             contentRating: selectedRating,
             language: selectedLanguage,

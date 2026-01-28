@@ -14,10 +14,16 @@ type StorageLike = {
     removeItem: (key: string) => Promise<void>;
 };
 
+const inMemoryStore = new Map<string, string>();
+
 const memoryStorage: StorageLike = {
-    getItem: async () => null,
-    setItem: async () => undefined,
-    removeItem: async () => undefined,
+    getItem: async (key: string) => inMemoryStore.get(key) ?? null,
+    setItem: async (key: string, value: string) => {
+        inMemoryStore.set(key, value);
+    },
+    removeItem: async (key: string) => {
+        inMemoryStore.delete(key);
+    },
 };
 
 function getStorage(): StorageLike | undefined {
@@ -37,12 +43,50 @@ function getStorage(): StorageLike | undefined {
 
 const storage = getStorage();
 
+const safeStorage: StorageLike = {
+    getItem: async (key: string) => {
+        if (storage) {
+            try {
+                const value = await storage.getItem(key);
+                if (value !== null) {
+                    return value;
+                }
+            } catch {
+                // fall back to in-memory storage
+            }
+        }
+        return memoryStorage.getItem(key);
+    },
+    setItem: async (key: string, value: string) => {
+        if (storage) {
+            try {
+                await storage.setItem(key, value);
+                return;
+            } catch {
+                // fall back to in-memory storage
+            }
+        }
+        await memoryStorage.setItem(key, value);
+    },
+    removeItem: async (key: string) => {
+        if (storage) {
+            try {
+                await storage.removeItem(key);
+                return;
+            } catch {
+                // fall back to in-memory storage
+            }
+        }
+        await memoryStorage.removeItem(key);
+    },
+};
+
 // Will be null if credentials not configured
 export const supabase: SupabaseClient | null =
     supabaseUrl && supabaseAnonKey
         ? createClient(supabaseUrl, supabaseAnonKey, {
             auth: {
-                storage: storage ?? memoryStorage,
+                storage: safeStorage,
                 autoRefreshToken: true,
                 persistSession: true,
                 detectSessionInUrl: false,
@@ -72,7 +116,7 @@ export async function invokeEdgeFunction<T>(
     return data as T;
 }
 
-export type StoryPreferencesInput = {
+export type StoryBookInput = {
     genres: string[];
     contentRating: string;
     language: string;
@@ -94,17 +138,38 @@ async function ensureAnonymousUserId(): Promise<string> {
 
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) {
-        throw new Error(error.message);
+        throw new Error(
+            `Anonymous sign-in failed. Enable "Allow anonymous sign-ins" in Supabase Auth settings. (${error.message})`
+        );
     }
 
-    if (!data.user?.id) {
-        throw new Error('Anonymous user not available.');
+    if (data.session?.access_token && data.session.refresh_token) {
+        const { error: setSessionError } = await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+        });
+        if (setSessionError) {
+            throw new Error(setSessionError.message);
+        }
     }
 
-    return data.user.id;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const { data: sessionAfter, error: sessionAfterError } = await supabase.auth.getSession();
+    if (sessionAfterError) {
+        throw new Error(sessionAfterError.message);
+    }
+
+    if (!sessionAfter.session?.user?.id) {
+        throw new Error(
+            'Auth session missing! Restart the app after enabling anonymous sign-ins, and ensure the device can reach Supabase.'
+        );
+    }
+
+    return sessionAfter.session.user.id;
 }
 
-export async function saveStoryPreferences(input: StoryPreferencesInput) {
+export async function saveStoryBookInput(input: StoryBookInput) {
     if (!supabase) {
         throw new Error('Supabase client not configured. Set environment variables.');
     }
@@ -112,21 +177,20 @@ export async function saveStoryPreferences(input: StoryPreferencesInput) {
     const userId = await ensureAnonymousUserId();
 
     const { error } = await supabase
-        .from('story_preferences')
-        .upsert(
-            {
-                user_id: userId,
-                genres: input.genres,
-                content_rating: input.contentRating,
-                language: input.language,
-                updated_at: new Date().toISOString(),
-            },
-            {
-                onConflict: 'user_id',
-            }
-        );
+        .from('story_book_inputs')
+        .insert({
+            user_id: userId,
+            genres: input.genres,
+            content_rating: input.contentRating,
+            language: input.language,
+        });
 
     if (error) {
+        if (error.code === '42501') {
+            throw new Error(
+                'Row-level security blocked this insert. Ensure anonymous sign-ins are enabled and the insert policy exists.'
+            );
+        }
         throw new Error(error.message);
     }
 }
