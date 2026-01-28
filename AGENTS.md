@@ -12,6 +12,7 @@
 ## Developer Workflow
 -   **Mobile**: `cd mobile && npx expo start` to run the app.
 -   **Backend**: `supabase functions serve` (if locally testing).
+-   **Edge Functions Deploy**: If a function needs to be pushed, you may deploy directly with `supabase functions deploy <function-name>`.
 -   **Lint/Format**: Keep code minimal and clean.
 
 ## Design Philosophy
