@@ -3,18 +3,46 @@
  * Initialize when credentials are available
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+type StorageLike = {
+    getItem: (key: string) => Promise<string | null>;
+    setItem: (key: string, value: string) => Promise<void>;
+    removeItem: (key: string) => Promise<void>;
+};
+
+const memoryStorage: StorageLike = {
+    getItem: async () => null,
+    setItem: async () => undefined,
+    removeItem: async () => undefined,
+};
+
+function getStorage(): StorageLike | undefined {
+    try {
+        // AsyncStorage may be unavailable until native rebuild
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const module = require('@react-native-async-storage/async-storage');
+        const storage = module?.default ?? module;
+        if (storage?.getItem && storage?.setItem && storage?.removeItem) {
+            return storage as StorageLike;
+        }
+        return undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+const storage = getStorage();
 
 // Will be null if credentials not configured
 export const supabase: SupabaseClient | null =
     supabaseUrl && supabaseAnonKey
         ? createClient(supabaseUrl, supabaseAnonKey, {
             auth: {
-                storage: AsyncStorage,
+                storage: storage ?? memoryStorage,
                 autoRefreshToken: true,
                 persistSession: true,
                 detectSessionInUrl: false,
