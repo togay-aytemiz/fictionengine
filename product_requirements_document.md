@@ -445,6 +445,7 @@ Output: recap + state_snapshot + continuity updates
 - [ ] “Surprise me” button (backend auto-selects A/B)
 - [x] Reading-optimized typography (serif body, clean sans UI)
 - [x] Smooth transitions between story segments
+- [x] Story library list with create-new-story entry point
 
 ---
 

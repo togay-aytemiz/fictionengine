@@ -1,0 +1,91 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://fictionengine.local/schemas/story_create_output.schema.json",
+    "title": "StoryCreateOutput",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "title",
+        "logline",
+        "episode_title",
+        "episode_text",
+        "choices"
+    ],
+    "properties": {
+        "title": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100,
+            "description": "Creative, evocative story title that reflects the genre and theme"
+        },
+        "logline": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 300,
+            "description": "Engaging 1-2 sentence hook that draws readers in"
+        },
+        "episode_title": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "description": "Compelling title for the first episode/chapter"
+        },
+        "episode_text": {
+            "type": "string",
+            "minLength": 1500,
+            "maxLength": 4000,
+            "description": "Rich narrative text for episode 1, approximately 400-600 words"
+        },
+        "choices": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "choice_id",
+                    "text",
+                    "intent",
+                    "risk_level",
+                    "leads_to"
+                ],
+                "properties": {
+                    "choice_id": {
+                        "type": "string",
+                        "enum": [
+                            "A",
+                            "B"
+                        ]
+                    },
+                    "text": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 200,
+                        "description": "User-facing choice text"
+                    },
+                    "intent": {
+                        "type": "string",
+                        "minLength": 5,
+                        "maxLength": 100,
+                        "description": "Short verb phrase describing the action"
+                    },
+                    "risk_level": {
+                        "type": "string",
+                        "enum": [
+                            "low",
+                            "medium",
+                            "high"
+                        ]
+                    },
+                    "leads_to": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 200,
+                        "description": "Brief preview of consequences without spoilers"
+                    }
+                }
+            }
+        }
+    }
+}

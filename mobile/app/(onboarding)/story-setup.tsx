@@ -7,12 +7,13 @@ import { colors, spacing, borderRadius, typography, sizes } from '../../design/t
 import { Button } from '../../components/Button';
 import { MediumHeader } from '../../components/MediumHeader';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { saveStoryBookInput } from '../../src/services/supabase';
+import { createStory } from '../../src/services/supabase';
+import { setStorySession, upsertStoryListItem } from '../../src/services/story-cache';
 
 const CONTENT_RATINGS = [
     { id: 'PG', label: 'PG', description: 'Suitable for all ages' },
     { id: 'PG-13', label: 'PG-13', description: 'Some mature themes' },
-    { id: 'R', label: 'R', description: 'Adult content' },
+    { id: 'ADULT', label: 'Adult', description: 'Mature themes' },
 ];
 
 const LANGUAGES = [
@@ -66,15 +67,18 @@ export default function StorySetupScreen() {
     const [scrollAreaHeight, setScrollAreaHeight] = useState(0);
     const [scrollContentHeight, setScrollContentHeight] = useState(0);
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const handleStart = () => {
+    const handleStart = async () => {
         if (isLoading) {
             return;
         }
         if (!selectedRating) {
             return;
         }
+        const primaryGenre = selectedGenres[0] ?? 'fantasy';
         setIsLoading(true);
+        setErrorMessage(null);
 
         // Start premium entrance animation
         Animated.sequence([
@@ -92,17 +96,37 @@ export default function StorySetupScreen() {
             }),
         ]).start();
 
-        saveStoryBookInput({
-            genres: selectedGenres,
-            contentRating: selectedRating,
-            language: selectedLanguage,
-        }).catch((error) => {
-            console.warn('Failed to save preferences:', error);
-            // Revert loading on error
+        try {
+            const story = await createStory({
+                genre: primaryGenre,
+                contentRating: selectedRating as 'PG' | 'PG-13' | 'ADULT',
+                language: selectedLanguage,
+            });
+            await setStorySession(story);
+            await upsertStoryListItem({
+                story: story.story,
+                session: story.session,
+                episode: story.episode_1,
+            });
+            Animated.timing(pageFadeAnim, {
+                toValue: 0,
+                duration: 800,
+                easing: Easing.inOut(Easing.quad),
+                useNativeDriver: true,
+            }).start(() => {
+                router.replace('/(story)');
+            });
+        } catch (error) {
+            console.warn('Failed to create story:', error);
             setIsLoading(false);
             fadeAnim.setValue(0);
             contentFadeAnim.setValue(0);
-        });
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : 'Story creation failed. Please try again.'
+            );
+        }
     };
 
     useEffect(() => {
@@ -152,23 +176,10 @@ export default function StorySetupScreen() {
         if (!isLoading) {
             return;
         }
-
-        const redirectTimeout = setTimeout(() => {
-            // Start page-level fade out before redirecting
-            Animated.timing(pageFadeAnim, {
-                toValue: 0,
-                duration: 800,
-                easing: Easing.inOut(Easing.quad),
-                useNativeDriver: true,
-            }).start(() => {
-                router.replace('/(story)');
-            });
-        }, 12000);
-
         return () => {
-            clearTimeout(redirectTimeout);
+            pageFadeAnim.setValue(1);
         };
-    }, [isLoading, router, pageFadeAnim]);
+    }, [isLoading, pageFadeAnim]);
 
     const canContinue = selectedRating !== null && selectedLanguage !== null;
 
@@ -259,6 +270,11 @@ export default function StorySetupScreen() {
                     disabled={!canContinue}
                     loading={isLoading}
                 />
+                {errorMessage && (
+                    <Text style={[styles.errorText, { color: theme.text.secondary }]}>
+                        {errorMessage}
+                    </Text>
+                )}
             </View>
 
             {isLoading && (
@@ -444,6 +460,11 @@ const styles = StyleSheet.create({
     actionContainer: {
         paddingHorizontal: spacing.screenPadding,
         paddingTop: 16,
+    },
+    errorText: {
+        ...typography.caption,
+        textAlign: 'center',
+        marginTop: spacing.sm,
     },
     separator: {
         height: 1,

@@ -22,6 +22,8 @@ export async function createStructuredOutput<T>({
     throw new Error("Missing OPENAI_API_KEY");
   }
 
+  const schemaName = (schema as any)?.title ?? "response";
+
   const payload = {
     model,
     input: [
@@ -31,6 +33,7 @@ export async function createStructuredOutput<T>({
     text: {
       format: {
         type: "json_schema",
+        name: schemaName,
         strict: true,
         schema,
       },

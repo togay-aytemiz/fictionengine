@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import storyProfileSchema from "../_shared/schemas/story_profile.schema.json" assert { type: "json" };
+import storyCreateOutputSchema from "../_shared/schemas/story_create_output.schema.json" assert { type: "json" };
 import { formatAjvErrors, validateSchema } from "../_shared/validation.ts";
+import { createStructuredOutput } from "../_shared/openai.ts";
 
 type ContentRating = "PG" | "PG-13" | "ADULT";
 
@@ -8,8 +10,22 @@ interface CreateStoryInput {
   genre: string;
   content_rating: ContentRating;
   app_lang: string;
-  user_id: string;
+  user_id?: string;
   is_anonymous?: boolean;
+}
+
+interface StoryCreateOutput {
+  title: string;
+  logline: string;
+  episode_title: string;
+  episode_text: string;
+  choices: Array<{
+    choice_id: "A" | "B";
+    text: string;
+    intent: string;
+    risk_level: "low" | "medium" | "high";
+    leads_to: string;
+  }>;
 }
 
 type StoryProfile = Record<string, unknown>;
@@ -26,6 +42,34 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function getTokenFromRequest(req: Request): string | null {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+  return authHeader.slice("Bearer ".length).trim() || null;
+}
+
+async function validateAndGetUserId(
+  supabaseUrl: string,
+  supabaseAnonKey: string,
+  token: string
+): Promise<{ userId: string } | { error: string }> {
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  });
+
+  const { data, error } = await userClient.auth.getUser();
+  if (error || !data.user) {
+    return { error: error?.message ?? "Invalid token" };
+  }
+  return { userId: data.user.id };
 }
 
 function buildStoryProfile(input: CreateStoryInput): StoryProfile {
@@ -101,6 +145,85 @@ function buildStoryProfile(input: CreateStoryInput): StoryProfile {
   };
 }
 
+function buildCreationPrompt(
+  storyProfile: StoryProfile,
+  input: CreateStoryInput
+): string {
+  const isTurkish = input.app_lang === "tr";
+  const lockedCanon = (storyProfile as any)?.canon?.locked ?? {};
+  const mainCharacter = lockedCanon.main_characters?.[0] ?? {};
+
+  const languageInstruction = isTurkish
+    ? "IMPORTANT: Write ALL content in Turkish (Türkçe). The title, logline, episode text, and choices must all be in Turkish."
+    : "Write all content in English.";
+
+  const ratingInstructions: Record<ContentRating, string> = {
+    "PG": "Keep content family-friendly. No violence, no explicit themes, no dark content.",
+    "PG-13": "Mild tension and conflict allowed. No graphic violence or explicit themes.",
+    "ADULT": "Mature themes allowed, but no hate speech, sexual violence, or self-harm.",
+  };
+
+  return `
+You are a master storyteller creating the opening of an interactive fiction story.
+
+GENRE: ${input.genre}
+CONTENT RATING: ${input.content_rating} - ${ratingInstructions[input.content_rating]}
+${languageInstruction}
+
+STORY CANON (locked truths):
+- World rules: ${JSON.stringify(lockedCanon.world_rules)}
+- Main character: ${mainCharacter.name} - ${mainCharacter.identity}
+- Character traits: ${JSON.stringify(mainCharacter.traits)}
+- Motivation: ${mainCharacter.motivation}
+- Fear: ${mainCharacter.fear}
+- Narrative style: ${JSON.stringify(lockedCanon.narrative_style)}
+- Theme/Tone: ${lockedCanon.theme_tone}
+
+YOUR TASK:
+1. Create an evocative, creative TITLE that captures the story's essence (not just "${input.genre} Story")
+2. Write a compelling LOGLINE (1-2 sentences) that hooks readers
+3. Write EPISODE 1:
+   - Create an intriguing episode title
+   - Write rich, immersive narrative text (400-600 words / minimum 1500 characters)
+   - Start with an immediate hook (no long exposition)
+   - Include vivid descriptions, character moments, and atmosphere
+   - Build tension toward a decision point
+   - End with exactly 2 meaningful choices (A and B)
+
+The episode MUST be substantial - like the opening chapter of a novel, not just a few sentences.
+Each choice should lead to meaningfully different story paths.
+`.trim();
+}
+
+async function generateStoryContent(
+  storyProfile: StoryProfile,
+  input: CreateStoryInput
+): Promise<StoryCreateOutput> {
+  const prompt = buildCreationPrompt(storyProfile, input);
+
+  console.log("[story-create] Calling OpenAI for story generation...");
+  const startTime = Date.now();
+
+  const result = await createStructuredOutput<StoryCreateOutput>({
+    model: "gpt-4o-mini",
+    system:
+      "You are the Story Creator. Output ONLY valid JSON matching the schema. " +
+      "Create compelling, immersive interactive fiction with rich narrative text. " +
+      "Episode text must be at least 400 words (1500+ characters).",
+    user: prompt,
+    schema: storyCreateOutputSchema,
+    temperature: 0.7,
+    max_output_tokens: 3000,
+  });
+
+  const elapsed = Date.now() - startTime;
+  console.log(`[story-create] OpenAI response received in ${elapsed}ms`);
+  console.log(`[story-create] Title: ${result.title}`);
+  console.log(`[story-create] Episode text length: ${result.episode_text.length} chars`);
+
+  return result;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -123,9 +246,6 @@ Deno.serve(async (req) => {
       400,
     );
   }
-  if (!payload?.user_id) {
-    return jsonResponse({ error: "Missing required field: user_id" }, 400);
-  }
 
   const storyProfile = buildStoryProfile(payload);
   const validation = validateSchema<StoryProfile>(
@@ -144,6 +264,7 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
     return jsonResponse(
       { error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" },
@@ -151,10 +272,35 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Try to get user from token first, fallback to user_id in body for anonymous users
+  let resolvedUserId: string | null = null;
+
+  const token = getTokenFromRequest(req);
+  if (token) {
+    const validationResult = await validateAndGetUserId(
+      supabaseUrl,
+      supabaseAnonKey || serviceRoleKey,
+      token
+    );
+    if ("userId" in validationResult) {
+      resolvedUserId = validationResult.userId;
+    }
+  }
+
+  // Fallback: use user_id from body (for anonymous users)
+  if (!resolvedUserId && payload.user_id && payload.is_anonymous) {
+    console.log("[story-create] Using user_id from body:", payload.user_id);
+    resolvedUserId = payload.user_id;
+  }
+
+  if (!resolvedUserId) {
+    return jsonResponse({ code: 401, message: "Invalid JWT" }, 401);
+  }
+
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const userRow = {
-    id: payload.user_id,
+    id: resolvedUserId,
     is_anonymous: payload.is_anonymous ?? true,
     app_lang: payload.app_lang,
   };
@@ -172,7 +318,7 @@ Deno.serve(async (req) => {
   const { error: inputError } = await supabase
     .from("story_book_inputs")
     .insert({
-      user_id: payload.user_id,
+      user_id: resolvedUserId,
       genres: [payload.genre],
       content_rating: payload.content_rating,
       language: payload.app_lang,
@@ -184,14 +330,26 @@ Deno.serve(async (req) => {
     );
   }
 
-  const storyTitle = `${payload.genre} Story`;
-  const logline = `A mysterious journey begins in a ${payload.genre} world.`;
+  // Generate story content using LLM
+  let storyContent: StoryCreateOutput;
+  try {
+    storyContent = await generateStoryContent(storyProfile, payload);
+  } catch (error) {
+    console.error("[story-create] LLM generation failed:", error);
+    return jsonResponse(
+      {
+        error: "Failed to generate story content",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 
   const { data: story, error: storyError } = await supabase
     .from("stories")
     .insert({
-      title: storyTitle,
-      logline,
+      title: storyContent.title,
+      logline: storyContent.logline,
       genre: payload.genre,
       content_rating: payload.content_rating,
       status: "active",
@@ -250,28 +408,6 @@ Deno.serve(async (req) => {
     );
   }
 
-  const mainCharacter = (storyProfile as any).canon.locked.main_characters[0]
-    ?.name ?? "The protagonist";
-  const episodeText =
-    `Fog drifts across the harbor as the first sign appears. ` +
-    `${mainCharacter} hears footsteps approaching through the shadows.`;
-  const episodeChoices = [
-    {
-      choice_id: "A",
-      text: "Move quietly toward the source of the sound",
-      intent: "Investigate the footsteps",
-      risk_level: "medium",
-      leads_to: "Spot the approaching danger early",
-    },
-    {
-      choice_id: "B",
-      text: "Stay hidden and keep watching",
-      intent: "Observe from cover",
-      risk_level: "low",
-      leads_to: "Gather more information",
-    },
-  ];
-
   const stateSnapshot = (storyProfile as any).flow.dynamic_state;
 
   const { data: episodeRow, error: episodeError } = await supabase
@@ -279,9 +415,9 @@ Deno.serve(async (req) => {
     .insert({
       story_id: story.id,
       episode_number: 1,
-      title: "First Spark",
-      text: episodeText,
-      choices: episodeChoices,
+      title: storyContent.episode_title,
+      text: storyContent.episode_text,
+      choices: storyContent.choices,
       recap: null,
       state_snapshot: stateSnapshot,
     })
@@ -298,7 +434,7 @@ Deno.serve(async (req) => {
   const { data: sessionRow, error: sessionError } = await supabase
     .from("sessions")
     .insert({
-      user_id: payload.user_id,
+      user_id: resolvedUserId,
       story_id: story.id,
       current_episode_number: 1,
     })
