@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, spacing, typography } from '../../design/tokens';
 import { MediumHeader } from '../../components/MediumHeader';
@@ -9,9 +10,18 @@ export default function HomeScreen() {
   const isDark = colorScheme === 'dark';
   const theme = isDark ? colors.dark : colors.light;
   const router = useRouter();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <Animated.View style={[styles.container, { backgroundColor: theme.background, opacity: fadeAnim }]}>
       <MediumHeader
         title="Home"
         rightIconName="person-circle-outline"
@@ -27,7 +37,7 @@ export default function HomeScreen() {
           Continue reading or start a new adventure.
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

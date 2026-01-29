@@ -2,6 +2,7 @@
 
 ## Agent Instructions
 -   **Commit Messages**: At the end of every session, provide a **1-line commit message** summarizing your work, followed by **bullet points** of specific changes.
+-   **Roadmap Hygiene**: After completing work, update `product_requirements_document.md` → **## 12. Roadmap Checklist** to mark done items with [x] and add new tasks if scope changed.
 
 ## Project Context
 **FictionEngine** is an interactive fiction platform focused on narrative continuity and a premium reading experience.

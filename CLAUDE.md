@@ -50,6 +50,11 @@ supabase functions serve
 ## Commit Convention
 Provide 1-line summary + bullet points of specific changes at session end.
 
+## Roadmap Hygiene
+After completing work, update `product_requirements_document.md` → **## 12. Roadmap Checklist**:
+- Mark completed items with [x]
+- Add new tasks if scope expands
+
 ## Code Style
 - Clean, minimal TypeScript
 - Prefer composition over inheritance

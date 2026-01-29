@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fictionengine.local/schemas/episode_generate.schema.json",
+  "title": "EpisodeGeneration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "episode_id",
+    "segment",
+    "choices",
+    "state_update",
+    "ledger_updates",
+    "continuity_checks",
+    "assumptions"
+  ],
+  "properties": {
+    "episode_id": { "type": "string", "minLength": 1 },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "text", "word_count"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "word_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "choices": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/Choice" }
+    },
+    "state_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time",
+        "location_id",
+        "characters_present",
+        "inventory_delta",
+        "open_threads_delta"
+      ],
+      "properties": {
+        "time": { "type": "string", "minLength": 1 },
+        "location_id": { "type": "string", "minLength": 1 },
+        "characters_present": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "inventory_delta": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/InventoryDelta" }
+        },
+        "open_threads_delta": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["add", "resolve"],
+          "properties": {
+            "add": { "type": "array", "items": { "type": "string" } },
+            "resolve": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "ledger_updates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/LedgerUpdate" }
+    },
+    "continuity_checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ContinuityCheck" }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "Choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["choice_id", "text", "intent", "risk_level", "leads_to"],
+      "properties": {
+        "choice_id": { "type": "string", "enum": ["A", "B"] },
+        "text": { "type": "string", "minLength": 1 },
+        "intent": { "type": "string", "minLength": 1 },
+        "risk_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "leads_to": { "type": "string", "minLength": 1 }
+      }
+    },
+    "InventoryDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "owner_id", "item", "notes"],
+      "properties": {
+        "op": { "type": "string", "enum": ["add", "remove", "update"] },
+        "owner_id": { "type": "string", "minLength": 1 },
+        "item": { "type": "string", "minLength": 1 },
+        "notes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "LedgerUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value", "introduced_in", "status"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string", "minLength": 1 },
+        "introduced_in": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["active"] }
+      }
+    },
+    "ContinuityCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "result", "note"],
+      "properties": {
+        "rule": {
+          "type": "string",
+          "enum": [
+            "Story Profile compliance",
+            "Continuity Notes compliance",
+            "Audience rating compliance"
+          ]
+        },
+        "result": { "type": "string", "enum": ["pass", "warn"] },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

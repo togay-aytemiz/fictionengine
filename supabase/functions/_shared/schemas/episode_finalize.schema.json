@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fictionengine.local/schemas/episode_finalize.schema.json",
+  "title": "EpisodeFinalizer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary_bullets",
+    "open_threads",
+    "state_snapshot",
+    "new_persistent_facts",
+    "flexible_canon_hits"
+  ],
+  "properties": {
+    "summary_bullets": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "open_threads": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "state_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location_id", "characters_present", "inventory"],
+      "properties": {
+        "time": { "type": "string", "minLength": 1 },
+        "location_id": { "type": "string", "minLength": 1 },
+        "characters_present": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "inventory": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "new_persistent_facts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PersistentFact" }
+    },
+    "flexible_canon_hits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/FlexibleCanonHit" }
+    }
+  },
+  "$defs": {
+    "PersistentFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    },
+    "FlexibleCanonHit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "value", "evidence"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "supporting_roles",
+            "core_conflict",
+            "locations_seed",
+            "key_items_or_secrets"
+          ]
+        },
+        "value": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

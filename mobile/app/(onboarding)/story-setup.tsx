@@ -42,7 +42,7 @@ const LOADING_SUBTITLES = [
     'Son dokunuşlar yapılıyor',
 ];
 
-export default function ProfileScreen() {
+export default function StorySetupScreen() {
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
     const theme = isDark ? colors.dark : colors.light;
@@ -60,6 +60,9 @@ export default function ProfileScreen() {
     const [selectedLanguage, setSelectedLanguage] = useState<string>('tr');
     const [isLoading, setIsLoading] = useState(false);
     const scrollAnim = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const contentFadeAnim = useRef(new Animated.Value(0)).current;
+    const pageFadeAnim = useRef(new Animated.Value(1)).current; // New: Full page fade
     const [scrollAreaHeight, setScrollAreaHeight] = useState(0);
     const [scrollContentHeight, setScrollContentHeight] = useState(0);
     const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
@@ -73,12 +76,32 @@ export default function ProfileScreen() {
         }
         setIsLoading(true);
 
+        // Start premium entrance animation
+        Animated.sequence([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 600,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: true,
+            }),
+            Animated.timing(contentFadeAnim, {
+                toValue: 1,
+                duration: 800,
+                easing: Easing.out(Easing.quad),
+                useNativeDriver: true,
+            }),
+        ]).start();
+
         saveStoryBookInput({
             genres: selectedGenres,
             contentRating: selectedRating,
             language: selectedLanguage,
         }).catch((error) => {
             console.warn('Failed to save preferences:', error);
+            // Revert loading on error
+            setIsLoading(false);
+            fadeAnim.setValue(0);
+            contentFadeAnim.setValue(0);
         });
     };
 
@@ -131,19 +154,27 @@ export default function ProfileScreen() {
         }
 
         const redirectTimeout = setTimeout(() => {
-            router.replace('/(story)');
-        }, 10000);
+            // Start page-level fade out before redirecting
+            Animated.timing(pageFadeAnim, {
+                toValue: 0,
+                duration: 800,
+                easing: Easing.inOut(Easing.quad),
+                useNativeDriver: true,
+            }).start(() => {
+                router.replace('/(story)');
+            });
+        }, 12000);
 
         return () => {
             clearTimeout(redirectTimeout);
         };
-    }, [isLoading, router]);
+    }, [isLoading, router, pageFadeAnim]);
 
     const canContinue = selectedRating !== null && selectedLanguage !== null;
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <MediumHeader title="Set Up Your Profile" onBack={() => router.back()} />
+        <Animated.View style={[styles.container, { backgroundColor: theme.background, opacity: pageFadeAnim }]}>
+            <MediumHeader title="Story Setup" onBack={() => router.back()} />
 
             <ScrollView
                 contentContainerStyle={[styles.scrollContent, { paddingTop: 0 }]}
@@ -231,13 +262,14 @@ export default function ProfileScreen() {
             </View>
 
             {isLoading && (
-                <View
+                <Animated.View
                     style={[
                         styles.loadingOverlay,
                         {
                             backgroundColor: theme.background,
                             paddingTop: insets.top,
                             paddingBottom: insets.bottom,
+                            opacity: fadeAnim,
                         },
                     ]}
                 >
@@ -249,6 +281,7 @@ export default function ProfileScreen() {
                             style={[
                                 styles.loadingScrollContent,
                                 {
+                                    opacity: contentFadeAnim,
                                     transform: [
                                         {
                                             translateY: scrollAnim.interpolate({
@@ -274,17 +307,32 @@ export default function ProfileScreen() {
                         />
                     </View>
 
-                    <View style={styles.loadingFooter}>
+                    <Animated.View
+                        style={[
+                            styles.loadingFooter,
+                            {
+                                opacity: contentFadeAnim,
+                                transform: [
+                                    {
+                                        translateY: contentFadeAnim.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [20, 0],
+                                        }),
+                                    },
+                                ],
+                            },
+                        ]}
+                    >
                         <Text style={[styles.loadingTitle, { color: theme.text.primary }]}>
                             Hikaye yazılıyor
                         </Text>
                         <Text style={[styles.loadingSubtitle, { color: theme.text.secondary }]}>
                             {LOADING_SUBTITLES[loadingMessageIndex]}
                         </Text>
-                    </View>
-                </View>
+                    </Animated.View>
+                </Animated.View>
             )}
-        </View>
+        </Animated.View>
     );
 }
 

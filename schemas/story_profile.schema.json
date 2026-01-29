@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fictionengine.local/schemas/story_profile.schema.json",
+  "title": "StoryProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "language", "genre", "content_rating", "canon", "flow"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "genre": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_rating": {
+      "type": "string",
+      "enum": ["PG", "PG-13", "ADULT"]
+    },
+    "canon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locked", "flexible"],
+      "properties": {
+        "locked": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "world_rules",
+            "main_characters",
+            "narrative_style",
+            "theme_tone",
+            "hard_forbidden_topics"
+          ],
+          "properties": {
+            "world_rules": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "main_characters": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/MainCharacter" }
+            },
+            "narrative_style": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pov", "tense", "reading_level", "tone_keywords"],
+              "properties": {
+                "pov": { "type": "string", "minLength": 1 },
+                "tense": { "type": "string", "minLength": 1 },
+                "reading_level": { "type": "string", "minLength": 1 },
+                "tone_keywords": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            "theme_tone": { "type": "string", "minLength": 1 },
+            "hard_forbidden_topics": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "flexible": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "supporting_roles",
+            "core_conflict",
+            "locations_seed",
+            "key_items_or_secrets"
+          ],
+          "properties": {
+            "supporting_roles": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/FlexibleItem" }
+            },
+            "core_conflict": { "$ref": "#/$defs/FlexibleItem" },
+            "locations_seed": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/FlexibleItem" }
+            },
+            "key_items_or_secrets": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/FlexibleItem" }
+            }
+          }
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dynamic_state"],
+      "properties": {
+        "dynamic_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "current_time",
+            "current_location_id",
+            "characters_present",
+            "inventory",
+            "open_threads",
+            "segment_goal",
+            "cliffhanger_seed"
+          ],
+          "properties": {
+            "current_time": { "type": "string", "minLength": 1 },
+            "current_location_id": { "type": "string", "minLength": 1 },
+            "characters_present": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "inventory": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "open_threads": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "segment_goal": { "type": "string", "minLength": 1 },
+            "cliffhanger_seed": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "MainCharacter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "identity", "traits", "motivation", "fear"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "identity": { "type": "string", "minLength": 1 },
+        "traits": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "motivation": { "type": "string", "minLength": 1 },
+        "fear": { "type": "string", "minLength": 1 }
+      }
+    },
+    "FlexibleItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "status", "evidence"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["tentative", "confirmed", "locked"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

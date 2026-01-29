@@ -95,7 +95,7 @@ export default function PreferencesScreen() {
                             return;
                         }
                         router.push({
-                            pathname: '/(onboarding)/profile',
+                            pathname: '/(onboarding)/story-setup',
                             params: {
                                 genres: selectedGenres.join(','),
                             },
